@@ -8,6 +8,7 @@ function patternContext(soundEngine, code) {
     Object.getOwnPropertyNames(Object.getPrototypeOf(soundEngine)).concat(Object.getOwnPropertyNames(soundEngine)).forEach(function(propName) {
       if (propName !== 'constructor' || propName !== 'evaluate') {
         if (typeof soundEngine[propName] === 'function') {
+          console.log("DEFINE ", propName);
           methodDefinitions += `var ${propName} = soundEngine.${propName}.bind(soundEngine);`;
         } else {
           // properties
