@@ -1,0 +1,159 @@
+# liv3c0der MK2 Documentation
+
+## How to read this document
+
+This is both a documentation of what liv3c0der MK2 currently does but also what I have planned for it in the future. Features that are not yet implemented are written in *italic*.
+
+## Mixer structure
+
+Each voice can be assigned to a mixer channel. There are 8 separate mixer channels:
+
+* Basedrum (bd) - with distortion *and compression*
+* Snaredrum (sd) - *delay and reverb sends preconfigured, probably EQ*
+* Percussion (perc)
+* Bass (bass) - (planned: with distortion)
+* Generic 1-3 (gen1-gen3)
+
+Each channel has a "volume fader" that can be set by the LV function:
+
+```javascript
+LV('$channelname', volume)
+```
+
+Additionally, there are two effects busses (sends):
+
+* reverb
+* delay
+
+Each channel can send a certain amount of signal to these send channels by using the SEND function:
+
+```javascript
+SEND('$channelname', '$sendname', amount)
+```
+
+## Instruments
+
+### Synths
+
+#### *AcidSynth*
+
+#### *Pad Synth*
+
+#### *FM Synth*
+
+#### *Sample Player*
+
+### Drums
+
+#### *Sample Player*
+
+#### DrumSynth
+
+a multi purpose drum synth that does basedrums reasonably well.
+
+Parameters:
+
+* start: start frequency of the frequency sweep (default: 200)
+* end: end frequency of the frequency shift (default: 50)
+* sweep: speed of the frequency sweep: (default: 20)
+* decay: amplitude decay (default: 20)
+* volume: volume of the whole instrument (default: 0.8)
+
+Usage:
+
+```javascript
+DP.p(output, time, options)
+```
+
+* output - the output channel
+* time - the scheduled start time
+* options - an options hash that can contain the above parameters
+
+Example:
+
+```javascript
+DP.p(CH('bd'), t[0], {volume: 0.2})
+```
+
+#### Snare Synth
+
+*a synth with a filtered noise generator and a drum synth below*
+
+#### Hihat Synth
+
+*filtered noise all the way*
+
+## Specifying notes
+
+In all places where you can put notes there are two different ways of specifying these:
+
+1. As a numeric value. This will be interpreted as a MIDI note number. (with 0 being a very low C)
+2. As a string that represents a note and an octave. This uses a similar notation form as ye olde trackers used - There are only sharps, no flats, you have to do the conversion yourself. So, a B flat in the 3rd octave would be an A sharp, written as 'a#3'.
+
+
+## Note utility functions
+
+`n(note)`
+
+converts a note into the frequency using the standard MIDI conversion formula.
+
+---
+
+`ch(rootnote, chord, offset, callback)`
+
+Chord helper:
+
+* rootnote is the root note of the chord
+* chord can be one of:
+  * 'maj'
+  * 'min'
+  * 'dom'
+  * 'maj-6'
+  * 'min-6'
+  * 'maj-7'
+  * 'min-7'
+* offset is a numeric transpose
+* callback is a function that gets called for each note of the generated chord, with the note as a MIDI note number as the sole parameter of the function. if you do not specify a callback, the function will simply return an array of the notes in the chord. This can be used for example for the arp helper.
+
+Usage example:
+
+```
+ch('c3', 'min', 0, function(n) {
+  playSomething(n)
+})
+```
+
+---
+
+`arp(notes, speed, callback)`
+
+*plays an arpeggio with the given notes (an array that can be created with `ch()`, for example)*
+
+## Drum utility functions
+
+`dp(pattern, callback)`
+
+drum pattern function:
+
+* pattern is defined as a string. `*` is a drum hit, `!` is a drum hit with accent. Every other character is treated as a rest. Patterns can be of arbitrary length but they will be looped within the current number of steps in a pattern (usually 16)
+* callback - will be called for each of the steps that contain a hit in the pattern. callback has two parameters, first is the step number and second is another function that takes two values and returns the first for normal drum hits and the second value for accented hits.
+
+Usage example:
+
+```javascript
+dp('*--!*---', function(st, acc) {
+  DS.p(CH('bd'), t[st], {start: acc(200, 800), decay: 8, volume: acc(0.8,2)})
+});
+```
+
+---
+
+`mb(divider, compare, callback)`
+
+ModBeat is a way to build rhythms by using the modulo function. the current step will be divided by the divider and then the remainder (the result of the modulo function) is compared against the compare value. If the values are equal, the callback is called with the step number as the sole parameter.
+
+Example:
+
+```javascript
+mb(4, 0, function(step) { DS.p(mixer.channelOut('bd'), t[step], {decay: 2})})
+```

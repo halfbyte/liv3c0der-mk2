@@ -77,6 +77,14 @@
     applyOptions(options = {}) {
       this.params = Object.assign(this.params, options);
     }
+
+    param(name) {
+      if (typeof this.params[name] === 'function') {
+        return this.params[name]();
+      } else {
+        return this.params[name];
+      }
+    }
   }
 
   class DrumSynth extends Parameterized {
@@ -92,17 +100,17 @@
       });
     }
     play(output, time) {
-      const fDecayTime = time + (1 / this.params.sweep)
-      const aDecayTime = (1 / this.params.decay)
+      const fDecayTime = time + (1 / this.param('sweep'))
+      const aDecayTime = (1 / this.param('decay'))
 
       const sine = this.context.createOscillator()
       const click = this.context.createOscillator();
       click.type = 'square'
 
-      AD(click.frequency, this.params.end, 100, time, 0, 0.001);
+      AD(click.frequency, this.param('end'), 100, time, 0, 0.001);
 
-      const clickamp = DCA(this.context, click, this.params.volume * 0.8, time, 0.005, 0.02)
-      const amp = DCA(this.context, sine, this.params.volume, time, 0.004, aDecayTime)
+      const clickamp = DCA(this.context, click, this.param('volume') * 0.8, time, 0.005, 0.02)
+      const amp = DCA(this.context, sine, this.param('volume'), time, 0.004, aDecayTime)
 
       clickamp.connect(output)
       amp.connect(output)
@@ -114,8 +122,8 @@
         click.disconnect(clickamp)
       }
 
-      sine.frequency.setValueAtTime(this.params.start, time);
-      sine.frequency.exponentialRampToValueAtTime(this.params.end, fDecayTime);
+      sine.frequency.setValueAtTime(this.param('start'), time);
+      sine.frequency.exponentialRampToValueAtTime(this.param('end'), fDecayTime);
       sine.start(time);sine.stop(time + aDecayTime + 1)
       click.start(time);click.stop(time + 0.002)
 
@@ -362,7 +370,7 @@
       }
       return this.mixer.channel(name).outGain.gain;
     }
-    SND(channel, send, value) {
+    SEND(channel, send, value) {
       if (value != null) {
         this.mixer.channel(channel).send(send).gain.value = value;
         return;
@@ -372,15 +380,18 @@
     }
 
 
-    ch(note, chord, offset) {
-      if (typeof arguments[arguments.length - 1] !== 'function') { return; }
-      const fun = arguments[arguments.length - 1];
+    ch(note, chord, offset, fun) {
       note = note2note(note);
       const chordOffsets = CHORDS[chord];
       if (!chordOffsets) { return; }
       var notes = chordOffsets.map(function(co) {
         return note + co + offset;
-      }).forEach(fun, this);
+      });
+      if (typeof(fun) === 'function') {
+        notes.forEach(fun, this);
+      } else {
+        return notes;
+      }
     }
     mb(mod, eq, callback) {
       for(var i=0;i<this.steps;i++) {
