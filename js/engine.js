@@ -286,6 +286,12 @@
       this.masterCompressor = context.createDynamicsCompressor();
       this.masterGain = context.createGain();
       this.masterCompressor.connect(this.masterGain);
+      this.masterCompressor.threshold.value = -30;
+      this.masterCompressor.knee.value = 40;
+      this.masterCompressor.ratio.value = 12;
+      this.masterCompressor.attack.value = 0;
+      this.masterCompressor.release.value = 0.25;
+
 
       this.masterGain.gain.value = 0.8;
       this.masterGain.connect(context.destination);
