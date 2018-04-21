@@ -1,36 +1,14 @@
 # liv3c0der MK2
 
-## State
+This is a work in progress. To see what's going on and what's already working, please see [the docs](docs/index.md) for more info.
 
-Does nothing useful right now. Please go away and come back later :)
+# Rationale
 
-## Ideas
+The development is guided by the following principles
 
-(this is currently a scratchpad for ideas of what I want to implement)
-
-- arp helper
-  - arp(note, chord, mode, callback)
-
-- beat helper
-  - modbeat(mod, eq, callback, params)
-  - drum('*--*--*--*', callback, params)
-
-### Channel system
-
-A fixed set of preconfigured channels:
-
-- [0] Basedrum with configurable compression and distortion
-- [1] Snare channel with configurable delay and reverb and probably some EQing
-- [2] Generic percussion channel
-- [4] Bass channel with configurable distortion
-- [5-8] a couple of generic channels with adjustable sends only
-
-2-3 Send channels:
-
-- Reverb/Delay and a configurable Reverb>Delay as send channels, adjustable per channel
-
-
-
+- deliver solid primitives that allow for quick composing
+- no build pipeline. I'm not against build pipelines in general but I wanted to use the fact that I can target a single browser (Chrome, because of Web MIDI) and use all the modern JS even without a compiler
+- works standalone. Due to security restrictions, it needs a local webserver, but 
 
 ## Credits
 

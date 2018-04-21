@@ -11,9 +11,29 @@
     'min-7': [0,4,7,10],
   }
 
+  //////////////////////////////////////////////// Utilities
+  function makeNoise(ac, length = 1) {
+    const buffer = ac.createBuffer(1, 44100 * length, 44100)
+    const array = buffer.getChannelData(0);
+    for(var i=0,l=array.length;i<l;i++) {
+      array[i] = Math.random() * 2 - 1
+    }
+    return buffer
+  }
+
   function n2f(n) {
     return Math.pow(2, (n - 69) / 12) * 440;
   }
+
+  function ADSR (param, time, length, min, max, a, d, s,r) {
+    if (s < 0 || s > 1) {return; }
+    param.setValueAtTime(min, time)
+    param.linearRampToValueAtTime(max, time + (a*length))
+    param.linearRampToValueAtTime(min + ((max - min) * s), time + ((a + d)*length))
+    param.setValueAtTime(min + ((max - min) * s), time + length - (length*r))
+    param.linearRampToValueAtTime(min, time + length)
+  }
+
 
   function AD(param, lower, upper, time, attack, decay) {
     param.setValueAtTime(lower, time)
@@ -87,6 +107,70 @@
     }
   }
 
+
+  class BufferNode {
+    constructor(context, buffer) {
+      this.context = context
+      this.buffer = buffer
+    }
+    connect(dest) {
+      this.destination = dest
+    }
+    start(time) {
+      this.source  = this.context.createBufferSource();
+      this.source.buffer = this.buffer;
+      this.source.connect(this.destination)
+      this.source.onended = () => {
+        this.source.disconnect(this.destination);
+      }
+      this.source.start(time)
+    }
+    stop(time) {
+      this.source.stop(time);
+    }
+  }
+
+  //////////////////////////////////////////////// Drum Sound Generators
+
+  class NoiseHat extends Parameterized {
+    constructor (context, noise) {
+      super();
+      this.context = context;
+      this.noise = noise || makeNoise(context);
+      this.defaults({
+        volume: 0.8,
+        decay: 20,
+        f: 6000,
+        Q: 5
+      })
+    }
+    play (output, time) {
+      const decayTime = time + (0.5 / this.param('decay'));
+      const noise = new BufferNode(this.context, this.noise)
+      const filter = this.context.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.value = this.param('f');
+      filter.Q.value = this.param('Q');
+      const amp = this.context.createGain();
+      noise.connect(filter);
+      filter.connect(amp);
+      amp.connect(output);
+      amp.gain.setValueAtTime(0, time);
+      amp.gain.linearRampToValueAtTime(this.param('volume'), time + 0.001);
+      amp.gain.setValueAtTime(this.param('volume'), time + 0.001);
+      amp.gain.linearRampToValueAtTime(0, decayTime)
+      noise.start(time);
+      noise.stop(decayTime);
+      return this
+    }
+
+    p (output, time, options = {}) {
+      this.applyOptions(options)
+      this.play(output, time)
+      return this
+    }
+  }
+
   class DrumSynth extends Parameterized {
     constructor(context) {
       super();
@@ -136,6 +220,106 @@
       return this;
     }
   }
+
+
+  class SnareSynth extends Parameterized {
+    constructor(context, noise) {
+      super()
+      this.context = context
+      this.noise = noise
+      console.log(noise);
+      this.drumsyn = new DrumSynth(this.context)
+      this.defaults({
+        volume: 0.5,
+        sweep: 20,
+        decay: 10,
+        start: 400,
+        end: 100,
+        f: 4000,
+        Q: 5
+      })
+      this.drumsyn.applyOptions(this.params)
+    }
+    play(output, time) {
+      const aDecayTime = time + (1 / this.param('decay'))
+      const amp = this.context.createGain()
+      amp.connect(output)
+      const noise = new BufferNode(this.context, this.noise)
+      const filter = this.context.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = this.param('f');
+      filter.Q.value = this.param('Q');
+      noise.connect(filter)
+
+      amp.gain.setValueAtTime(0, time);
+      amp.gain.linearRampToValueAtTime(this.param('volume'), time + 0.001);
+      amp.gain.linearRampToValueAtTime(0, aDecayTime);
+      filter.connect(amp)
+      noise.onended = () => {
+        noise.disconnect(filter)
+        filter.disconnect(amp)
+        amp.disconnect(output)
+      }
+      noise.start(time)
+      noise.stop(aDecayTime)
+      this.drumsyn.applyOptions(this.params)
+      this.drumsyn.play(output, time)
+      return this
+    }
+
+    p(output, time, options = {}) {
+      this.applyOptions(options)
+      this.play(output, time)
+      return this
+    }
+  }
+
+  //////////////////////////////////////////////// Melodic Sound Generators
+
+  class AcidSynth extends Parameterized {
+    constructor(context) {
+      super()
+      this.context = context
+      this.defaults({
+        osc_type: 'sawtooth',
+        decay: 0.6,
+        f: 300,
+        fmod: 4000,
+        Q: 10
+      })
+    }
+
+    play(destination, time, length, freq, volume = 0.2) {
+      const gain = this.context.createGain();
+      const filter1 = this.context.createBiquadFilter();
+      const filter2 = this.context.createBiquadFilter();
+      const osc = this.context.createOscillator();
+      osc.type = this.param('osc_type')
+      osc.frequency.value = freq
+
+      ADSR(gain.gain, time, length, 0, volume, 0.01, this.param('decay'), 0, 0)
+      ADSR(filter1.frequency, time, length, this.param('f'), this.param('f') + this.param('fmod'), 0.01, this.param('decay'), 0, 0)
+      ADSR(filter2.frequency, time, length, this.param('f'), this.param('f') + this.param('fmod'), 0.01, this.param('decay'), 0, 0)
+
+      filter1.Q.value = this.param('Q')
+      filter2.Q.value = this.param('Q')
+      osc.connect(filter1)
+      filter1.connect(filter2)
+      filter2.connect(gain)
+      gain.connect(destination)
+      osc.start(time)
+      osc.stop(time+length)
+      return this
+    }
+
+    p (out, time, length, note, options = {}) {
+      this.applyOptions(options)
+      this.play(out, time, length, note, this.param('volume'))
+      return this
+    }
+  }
+
+  //////////////////////////////////////////////// Effects
 
   class Reverb {
     constructor(context, length = 2, decay = 5) {
@@ -204,6 +388,8 @@
       this.mix.connect(connectable);
     }
   }
+
+  //////////////////////////////////////////////// Mixer
 
   class MixerChannel {
     constructor(context, sends, type = 'generic') {
@@ -341,6 +527,8 @@
 
   }
 
+  //////////////////////////////////////////////// Engine
+
   class SoundEngine {
     constructor() {
       this.context = new AudioContext();
@@ -351,10 +539,16 @@
       this.steps = 16;
       this.groove = 0.0;
       this.loop = 0;
+      this.NOISE = makeNoise(this.context);
       this.DS = new DrumSynth(this.context);
+      this.HH = new NoiseHat(this.context, this.NOISE);
+      this.SD = new SnareSynth(this.context, this.NOISE);
+      this.AcidSynth =  new AcidSynth(this.context)
     }
+
     hello(dis) {
     }
+
     n(note, offset = 0) {
       note = note2note(note);
       return n2f(note + offset);
@@ -445,7 +639,7 @@
             console.log("ERRRR", e);
             if (this.oldPattern) {
               this.pattern = this.oldPattern;
-              this.pattern.call(this);
+              this.pattern.call(this.soundEngine, stepTimes, timePerStep);
             } else {
               this.pattern = null;
             }

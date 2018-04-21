@@ -22,8 +22,8 @@ LV('$channelname', volume)
 
 Additionally, there are two effects busses (sends):
 
-* reverb
-* delay
+* Reverb ('reverb')
+* delay ('delay')
 
 Each channel can send a certain amount of signal to these send channels by using the SEND function:
 
