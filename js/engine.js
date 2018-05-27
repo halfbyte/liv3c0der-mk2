@@ -120,9 +120,6 @@
       this.source  = this.context.createBufferSource();
       this.source.buffer = this.buffer;
       this.source.connect(this.destination)
-      this.source.onended = () => {
-        this.source.disconnect(this.destination);
-      }
       this.source.start(time)
     }
     stop(time) {
@@ -141,7 +138,7 @@
         volume: 0.8,
         decay: 20,
         f: 6000,
-        Q: 5
+        q: 5
       })
     }
     play (output, time) {
@@ -150,7 +147,7 @@
       const filter = this.context.createBiquadFilter();
       filter.type = "bandpass";
       filter.frequency.value = this.param('f');
-      filter.Q.value = this.param('Q');
+      filter.Q.value = this.param('q');
       const amp = this.context.createGain();
       noise.connect(filter);
       filter.connect(amp);
@@ -198,18 +195,20 @@
 
       clickamp.connect(output)
       amp.connect(output)
-
-      sine.onended = () => {
-        clickamp.disconnect(output);
-        amp.disconnect(output);
-        sine.disconnect(amp);
-        click.disconnect(clickamp)
-      }
+      // function done() {
+      //   clickamp.disconnect(output);
+      //   amp.disconnect(output);
+      //   sine.disconnect(amp);
+      //   click.disconnect(clickamp)
+      //   sine.removeEventListener('ended', done);
+      // }
+      // sine.addEventListener('ended' , done)
 
       sine.frequency.setValueAtTime(this.param('start'), time);
       sine.frequency.exponentialRampToValueAtTime(this.param('end'), fDecayTime);
       sine.start(time);sine.stop(time + aDecayTime + 1)
       click.start(time);click.stop(time + 0.002)
+
 
       return this;
     }
@@ -227,7 +226,6 @@
       super()
       this.context = context
       this.noise = noise
-      console.log(noise);
       this.drumsyn = new DrumSynth(this.context)
       this.defaults({
         volume: 0.5,
@@ -236,7 +234,7 @@
         start: 400,
         end: 100,
         f: 4000,
-        Q: 5
+        q: 5
       })
       this.drumsyn.applyOptions(this.params)
     }
@@ -248,18 +246,19 @@
       const filter = this.context.createBiquadFilter();
       filter.type = "lowpass";
       filter.frequency.value = this.param('f');
-      filter.Q.value = this.param('Q');
+      filter.Q.value = this.param('q');
       noise.connect(filter)
 
       amp.gain.setValueAtTime(0, time);
       amp.gain.linearRampToValueAtTime(this.param('volume'), time + 0.001);
       amp.gain.linearRampToValueAtTime(0, aDecayTime);
       filter.connect(amp)
-      noise.onended = () => {
-        noise.disconnect(filter)
-        filter.disconnect(amp)
-        amp.disconnect(output)
-      }
+      // noise.onended = () => {
+      //   noise.disconnect(filter)
+      //   filter.disconnect(amp)
+      //   amp.disconnect(output)
+      //   noise.onended = null
+      // }
       noise.start(time)
       noise.stop(aDecayTime)
       this.drumsyn.applyOptions(this.params)
@@ -281,11 +280,11 @@
       super()
       this.context = context
       this.defaults({
-        osc_type: 'sawtooth',
+        osc: 'sawtooth',
         decay: 0.6,
         f: 300,
         fmod: 4000,
-        Q: 10
+        q: 10
       })
     }
 
@@ -294,27 +293,34 @@
       const filter1 = this.context.createBiquadFilter();
       const filter2 = this.context.createBiquadFilter();
       const osc = this.context.createOscillator();
-      osc.type = this.param('osc_type')
+      osc.type = this.param('osc')
       osc.frequency.value = freq
 
       ADSR(gain.gain, time, length, 0, volume, 0.01, this.param('decay'), 0, 0)
       ADSR(filter1.frequency, time, length, this.param('f'), this.param('f') + this.param('fmod'), 0.01, this.param('decay'), 0, 0)
       ADSR(filter2.frequency, time, length, this.param('f'), this.param('f') + this.param('fmod'), 0.01, this.param('decay'), 0, 0)
 
-      filter1.Q.value = this.param('Q')
-      filter2.Q.value = this.param('Q')
+      filter1.Q.value = this.param('q')
+      filter2.Q.value = this.param('q')
       osc.connect(filter1)
       filter1.connect(filter2)
       filter2.connect(gain)
       gain.connect(destination)
+      // osc.onended = () => {
+      //   gain.disconnect(destination);
+      //   filter2.disconnect(gain);
+      //   filter1.disconnect(filter2)
+      //   osc.disconnect(filter1)
+      //   osc.onended = null
+      // }
       osc.start(time)
       osc.stop(time+length)
       return this
     }
 
-    p (out, time, length, note, options = {}) {
+    p (out, time, length, freq, options = {}) {
       this.applyOptions(options)
-      this.play(out, time, length, note, this.param('volume'))
+      this.play(out, time, length, freq, this.param('volume'))
       return this
     }
   }
@@ -335,7 +341,6 @@
 
       const sampleRate = this.context.sampleRate
       const bufferLength = sampleRate * length
-      console.log("mkBuffer", length, decay, bufferLength);
       const buffer = this.context.createBuffer(2, bufferLength, sampleRate)
       var impulseL = buffer.getChannelData(0)
       var impulseR = buffer.getChannelData(1)
@@ -373,11 +378,18 @@
 
   class Distortion {
     constructor(context) {
+      this.inputter = context.createOscillator()
+      this.inputter.frequency.value = 20
+      this.inputterGain = context.createGain()
+      this.inputterGain.gain.value = 0.02
       this.context = context;
       this.mix = context.createGain();
       this.mix.gain.value = 1;
       this.dist = context.createWaveShaper()
       this.dist.connect(this.mix)
+      this.inputter.connect(this.inputterGain)
+      this.inputterGain.connect(this.dist)
+      this.inputter.start()
       this.input = this.dist
       this.setCurve(50);
     }
@@ -401,17 +413,14 @@
       this.outGain.gain.value=0.75;
 
       const methodName = `make_${type}`;
-      console.log("MAKE CH", methodName, this[methodName]);
       if (this[methodName]) {
         this[methodName]();
       } else {
-        console.log("mkGeneric");
         this.make_generic();
       }
       this.connectSends();
     }
     make_generic() {
-      console.log("make generic");
       // just a passthrough
       this.input.connect(this.outGain);
     }
@@ -425,7 +434,6 @@
     }
     connectSends() {
       Object.keys(this.sends).forEach((sendName) => {
-        console.log('send', sendName);
         const send = this.sends[sendName];
         const gain = this.context.createGain();
         gain.gain.value = 0.0;
@@ -447,7 +455,6 @@
       this.outGain = this.context.createGain();
       this.outGain.gain.value = 0.67;
       const methodName = `make_${type}`;
-      console.log("MAKE SND", methodName, this[methodName]);
       if (this[methodName]) {
         this[methodName]();
       } else {
@@ -463,9 +470,7 @@
       this.delay.connect(this.outGain);
     }
     make_reverb() {
-      console.log('MKREV');
       this.reverb = new Reverb(this.context);
-      console.log(this.reverb.input);
       this.input.connect(this.reverb.input);
       this.reverb.connect(this.outGain);
     }
@@ -530,7 +535,12 @@
   //////////////////////////////////////////////// Engine
 
   class SoundEngine {
-    constructor() {
+    constructor(callback) {
+      this.constructorCallback = callback
+      alert('Start Sound')
+      this.lateConstructor()
+    }
+    lateConstructor() {
       this.context = new AudioContext();
       this.mixer = new Mixer(this.context);
       this.mx = this.mixer;
@@ -544,6 +554,14 @@
       this.HH = new NoiseHat(this.context, this.NOISE);
       this.SD = new SnareSynth(this.context, this.NOISE);
       this.AcidSynth =  new AcidSynth(this.context)
+      this.SL = new window.SampleLoader(this.context)
+      if (this.constructorCallback) {
+        this.constructorCallback(this)
+      }
+      const globals = ['n', 'CH', 'LV', 'SEND', 'ch', 'dp', 'mb']
+      globals.forEach((g) => {
+        this[g] = this[g].bind(this)
+      })
     }
 
     hello(dis) {
@@ -607,15 +625,81 @@
 
   }
 
+  class MIDIEngine {
+    constructor(audioContext) {
+      this._audioContext = audioContext;
+      if (navigator.requestMIDIAccess == null) { return }
+      navigator.requestMIDIAccess().then((access) => {
+        this._lateSetup(access);
+      }).catch((err) => {
+        console.error("MIDI ERROR", err);
+      })
+    }
+    _lateSetup(midiAccess) {
+      this._INPUTS = {}
+      this._OUTPUTS = {}
+      this._subscriptions = []
+      this.midiAccess = midiAccess
+      this.midiAccess.inputs.forEach((input) => {
+        this._INPUTS[input.name] = input;
+        input.onmidimessage = (event) => {
+          this._sendInput(event.data);
+        }
+      })
+      this.midiAccess.outputs.forEach((output) => {
+        this._OUTPUTS[output.name] = output;
+      })
+    }
+    midiOutput(name) {
+      return this._OUTPUTS[name];
+    }
+    midiSubscribeToInput(fun) {
+      this._subscriptions.push(fun);
+    }
+    midiResetSubscriptions() {
+      this._subscriptions = []
+    }
+    _sendInput(data) {
+      this._subscriptions.forEach((fun) => fun(data))
+    }
+    midiSend(outputName, message, time) {
+      const midiNow = window.performance.now()
+      const audioNow = this._audioContext.currentTime * 1000.0
+      const diff = midiNow - audioNow
+      const midiTime = time * 1000.0 + diff;
+      this.midiOutput(outputName).send(message, midiTime );
+    }
+    midiSendNote(outputName, channel, note, velocity, time, length) {
+      this.midiSend(outputName, [0x90 + channel, note, velocity], time)
+      this.midiSend(outputName, [0x80 + channel, note, velocity], time + length)
+    }
+
+  }
 
   class Engine {
     constructor() {
       this.pattern = null;
       this.oldPattern = null;
       this.callPattern = this.callPattern.bind(this);
-      this.soundEngine = new SoundEngine();
-      this.nextPatternTime = 0;
-      this.callPattern();
+      new SoundEngine((soundEngine) => {
+        this.soundEngine = soundEngine
+        this.midiEngine = new MIDIEngine(this.soundEngine.context);
+        this.nextPatternTime = 0;
+        this.callPattern();
+        this.updateLaunchpad()
+        window.__engine = this;
+      });
+    }
+
+    updateLaunchpad() {
+      if (window.Launchpad && window.Launchpad.enabled) {
+        const timePerStep = 60 / (4 * this.soundEngine.tempo);
+        const timeInPattern = this.soundEngine.context.currentTime - this.currentPatternTime
+        var currentStep = Math.floor(timeInPattern / timePerStep)
+        if (currentStep < 0) { currentStep = currentStep + 16 }
+        window.Launchpad.currentStep = currentStep
+      }
+      setTimeout(() => this.updateLaunchpad(), 20)
     }
 
     callPattern() {
@@ -636,7 +720,7 @@
             this.pattern.call(this.soundEngine, stepTimes, timePerStep);
             this.soundEngine.loop = this.soundEngine.loop + 1;
           } catch(e) {
-            console.log("ERRRR", e);
+            console.log(e);
             if (this.oldPattern) {
               this.pattern = this.oldPattern;
               this.pattern.call(this.soundEngine, stepTimes, timePerStep);
@@ -646,13 +730,17 @@
           }
 
         }
+        this.currentPatternTime = this.nextPatternTime;
         this.nextPatternTime += this.soundEngine.steps * timePerStep;
       }
       setTimeout(this.callPattern, 100);
     }
 
     evaluate(code) {
-      const pattern = patternContext(this.soundEngine, code);
+      // code, SE, ME
+      const pattern = patternContext(code,
+        this.soundEngine, this.midiEngine
+      );
       if (this.pattern) {
         this.oldPattern = this.pattern;
       }

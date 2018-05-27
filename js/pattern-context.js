@@ -1,34 +1,23 @@
 var methodDefinitions = null;
 
-function patternContext(soundEngine, code) {
-  // define local scope for function
-  // SoundEngine shortcuts;
-  if (!methodDefinitions) {
-    methodDefinitions = "";
-    Object.getOwnPropertyNames(Object.getPrototypeOf(soundEngine)).concat(Object.getOwnPropertyNames(soundEngine)).forEach(function(propName) {
-      if (propName !== 'constructor' || propName !== 'evaluate') {
-        if (typeof soundEngine[propName] === 'function') {
-          console.log("DEFINE ", propName);
-          methodDefinitions += `var ${propName} = soundEngine.${propName}.bind(soundEngine);`;
-        } else {
-          // properties
-          methodDefinitions += `var ${propName} = soundEngine.${propName};`;
-        }
-
-      }
-    });
-    methodDefinitions += "\n";
-  }
-  //var hello = soundEngine.hello;
-
-
-
-
+function patternContext(code, SE, ME) {
   // actual evaluation
+  // const globals = ['n', 'CH', 'LV', 'SEND', 'ch', 'dp', 'mb']
+
+  var n = SE.n
+  var CH = SE.CH
+  var LV = SE.LV
+  var SEND = SE.SEND
+  var ch = SE.ch
+  var dp = SE.dp
+  var mb = SE.mb
+  var SL = SE.SL
+
   try {
-    eval(methodDefinitions + code);
-    if (typeof once == 'function') {
-      once.call(soundEngine);
+    eval(code);
+
+    if (typeof once === 'function') {
+      once.call(SE);
     }
     if (typeof pattern !== 'undefined') {
       return pattern;

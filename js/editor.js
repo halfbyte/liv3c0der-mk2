@@ -9,41 +9,37 @@
 
   document.addEventListener('DOMContentLoaded', startEditor);
 
-  var codeMirror = null;
   const engine = new Engine();
+  var editor;
 
   function startEditor() {
-    console.log("IN THE GAME!");
-    let editorDiv = document.getElementById('editor');
-    codeMirror = CodeMirror(editorDiv, {
-      value: defaultProgram,
-      mode: 'javascript',
-      theme: 'monokai',
-      tabSize: 2,
-      extraKeys: {
-        'Cmd-Enter': evaluate,
-        'Ctrl-Enter': evaluate,
-        'Cmd-7': function(cm) {
-          cm.toggleComment();
-        },
-        'Cmd-S': save
-      },
-      matchBrackets: true,
-      autoCloseBrackets: true,
-      lint: CodeMirror.lint.javascript,
-      autofocus: true,
+    editor = ace.edit("editor");
+    editor.setTheme("ace/theme/monokai");
+    editor.session.setMode("ace/mode/javascript");
+    // this.editor.container.addEventListener("keydown", keydown, true);
+    editor.commands.addCommand({
+        name: "execute",
+        bindKey: { win: "Ctrl-Enter", mac: "Command-Enter" },
+        exec: evaluate
     });
+    editor.commands.addCommand({
+        name: "save",
+        bindKey: { win: "Ctrl-S", mac: "Command-S" },
+        exec: save
+    });
+    editor.setValue(defaultProgram);
+  }
 
-
+  function keydown(event) {
 
   }
 
   function evaluate() {
-    engine.evaluate(codeMirror.getValue());
+    engine.evaluate(editor.getValue());
   }
 
   function save() {
-    localStorage['__lc2__'] = codeMirror.getValue();
+    localStorage['__lc2__'] = editor.getValue();
   }
 
 })(window);
