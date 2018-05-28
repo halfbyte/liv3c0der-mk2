@@ -28,3 +28,42 @@ body {
   padding: 0;
   color: rgba(100,0,0, 0.4);
 }
+
+.sample-list {
+  opacity: 0.8;
+  z-index: 100;
+  position: absolute;
+  top: 10%;
+  right: -130px;
+  background-color: rgba(100,0,0, 0.4);
+  width: 200px;
+}
+.sample-list.open {
+  right: 0px;
+}
+
+.song-list {
+  opacity: 0.8;
+  z-index: 100;
+  position: absolute;
+  top: 10%;
+  left: -130px;
+  background-color: rgba(100,0,0, 0.4);
+  width: 200px;
+}
+.song-list ul, .sample-list ul {
+  list-style-type: none;
+  text-overflow: ellipsis;
+  margin: 0; padding: 0;
+}
+.song-list a, .sample-list li {
+  color: #fff;
+  text-decoration: none;
+  font-size: 0.8em;
+}
+.song-list .handle {
+  text-align: right;
+}
+.song-list.open {
+  left: 0px;
+}

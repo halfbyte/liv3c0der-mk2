@@ -1,5 +1,4 @@
 (function(window) {
-
   const NOTES = 'c d ef g a b';
   const CHORDS = {
     'maj': [0,4,7],
@@ -9,6 +8,7 @@
     'min-6': [0,3,7,9],
     'maj-7': [0,4,7,11],
     'min-7': [0,4,7,10],
+    'haus': [0,3,7,12],
   }
 
   //////////////////////////////////////////////// Utilities
@@ -325,6 +325,64 @@
     }
   }
 
+  class SpreadSynth extends Parameterized {
+
+    constructor(context) {
+      super()
+      this.context = context;
+      this.defaults({
+        spread: 10,
+        osc_type: 'sawtooth',
+        amp_a: 0.01,
+        amp_d: 0.1,
+        amp_s: 0.8,
+        amp_r: 0.1,
+        flt_a: 0.01,
+        flt_d: 0.1,
+        flt_s: 0.8,
+        flt_r: 0.01,
+        flt_freq: 500,
+        flt_mod: 2000,
+        flt_type: 'lowpass',
+        Q: 10,
+        volume: 0.1
+      });
+    }
+
+    play(destination, time, length, note) {
+      var filter, gain, osc1, osc2;
+      gain = this.context.createGain();
+      filter = this.context.createBiquadFilter();
+      filter.type = this.param('flt_type')
+      osc1 = this.context.createOscillator();
+      osc2 = this.context.createOscillator();
+      osc1.type = this.param('osc_type')
+      osc2.type = this.param('osc_type')
+      osc1.detune.value = this.param('spread')
+      osc2.detune.value = this.param('spread') * -1
+      osc1.frequency.value = note
+      osc2.frequency.value = note
+      ADSR(gain.gain, time, length, 0, this.param('volume'), this.param('amp_a'), this.param('amp_d'), this.param('amp_s'), this.param('amp_r'));
+      ADSR(filter.frequency, time, length, this.param('flt_freq'), this.param('flt_freq') + this.param('flt_mod'), this.param('flt_a'), this.param('flt_d'), this.param('flt_s'), this.param('flt_r'));
+      filter.Q.value = this.param('Q');
+      osc1.connect(filter);
+      osc2.connect(filter);
+      filter.connect(gain);
+      gain.connect(destination);
+      osc1.start(time);
+      osc2.start(time);
+      osc1.stop(time + length);
+      osc2.stop(time + length);
+      return this;
+    }
+
+  p(out, time, length, note, options = {}) {
+    this.applyOptions(options);
+    this.play(out, time, length, note);
+    return this;
+  }
+}
+
   //////////////////////////////////////////////// Effects
 
   class Reverb {
@@ -548,12 +606,13 @@
       this.tempo = 120;
       this.steps = 16;
       this.groove = 0.0;
-      this.loop = 0;
+      this.lc = 0;
       this.NOISE = makeNoise(this.context);
       this.DS = new DrumSynth(this.context);
       this.HH = new NoiseHat(this.context, this.NOISE);
       this.SD = new SnareSynth(this.context, this.NOISE);
       this.AcidSynth =  new AcidSynth(this.context)
+      this.SpreadSynth =  new SpreadSynth(this.context)
       this.SL = new window.SampleLoader(this.context)
       if (this.constructorCallback) {
         this.constructorCallback(this)
@@ -628,6 +687,8 @@
   class MIDIEngine {
     constructor(audioContext) {
       this._audioContext = audioContext;
+      this.MIDI_DELAY_COMPENSATION = 30.0 // wild guess, probably needs fine tuning.
+
       if (navigator.requestMIDIAccess == null) { return }
       navigator.requestMIDIAccess().then((access) => {
         this._lateSetup(access);
@@ -662,16 +723,17 @@
     _sendInput(data) {
       this._subscriptions.forEach((fun) => fun(data))
     }
-    midiSend(outputName, message, time) {
+    send(outputName, message, time) {
       const midiNow = window.performance.now()
       const audioNow = this._audioContext.currentTime * 1000.0
       const diff = midiNow - audioNow
       const midiTime = time * 1000.0 + diff;
-      this.midiOutput(outputName).send(message, midiTime );
+
+      this.midiOutput(outputName).send(message, midiTime + this.MIDI_DELAY_COMPENSATION);
     }
-    midiSendNote(outputName, channel, note, velocity, time, length) {
-      this.midiSend(outputName, [0x90 + channel, note, velocity], time)
-      this.midiSend(outputName, [0x80 + channel, note, velocity], time + length)
+    note(outputName, channel, note, velocity, time, length) {
+      this.send(outputName, [0x90 + channel, note2note(note), velocity], time)
+      this.send(outputName, [0x80 + channel, note2note(note), velocity], time + length)
     }
 
   }
@@ -718,7 +780,6 @@
           }
           try {
             this.pattern.call(this.soundEngine, stepTimes, timePerStep);
-            this.soundEngine.loop = this.soundEngine.loop + 1;
           } catch(e) {
             console.log(e);
             if (this.oldPattern) {
@@ -732,10 +793,13 @@
         }
         this.currentPatternTime = this.nextPatternTime;
         this.nextPatternTime += this.soundEngine.steps * timePerStep;
+        this.soundEngine.lc += 1
       }
       setTimeout(this.callPattern, 100);
     }
-
+    stop() {
+      this.evaluate("function pattern() {}")
+    }
     evaluate(code) {
       // code, SE, ME
       const pattern = patternContext(code,

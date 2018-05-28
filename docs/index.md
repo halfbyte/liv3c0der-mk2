@@ -37,7 +37,15 @@ SEND('$channelname', '$sendname', amount)
 
 * Cmd-7: Toggle Comment on line
 * Cmd-Enter / Ctrl-Enter: Evaluate Code
-* Cmd-S
+* Cmd-S: Save
+
+The Save command looks for a string in the current code that looks like this:
+
+```
+// name: foo
+```
+
+It will then save the file in local storage under than name. If no name is given a timestamp will be used.
 
 ## Instruments
 
@@ -121,6 +129,41 @@ Parameters:
 
 Usage: See Drum Synth
 
+## Using MIDI
+
+When used in Chrome (or any Web MIDI capable browser), all available MIDI devices can be used.
+You need to know the exact MIDI device name though.
+
+There are a couple of methods available on the ME (MidiEngine) namespace:
+
+### `ME.note()``
+
+Usage:
+
+```
+ME.play(outputName, channel, note, velocity, time, length)
+```
+
+Parameters:
+
+* outputName - The exact name of the MIDI device
+* channel - 0-15 (zero indexed, sorry)
+* note - Note number or symbol
+* velocity - 1-127
+* time
+* length
+
+Both time and length are specified in the AudioContext units used by the Web Audio engine and then
+converted. As the AudioContext.currentTime thing does not include the audio latency (and there's no
+good way of querying the latency), there's a magic value you can set manually to compensate for the
+audio latency. Its default is 30ms which seems to work good enough for my setup.
+
+To set it:
+
+```
+ME.MIDI_DELAY_COMPENSATION = 30.0
+```
+
 ## Specifying notes
 
 In all places where you can put notes there are two different ways of specifying these:
@@ -150,6 +193,7 @@ Chord helper:
   * 'min-6'
   * 'maj-7'
   * 'min-7'
+  * 'haus'
 * offset is a numeric transpose
 * callback is a function that gets called for each note of the generated chord, with the note as a MIDI note number as the sole parameter of the function. if you do not specify a callback, the function will simply return an array of the notes in the chord. This can be used for example for the arp helper.
 
