@@ -50,7 +50,7 @@
   }
 
   function distCurve(ac, k) {
-    c = new Float32Array(ac.sampleRate)
+    const c = new Float32Array(ac.sampleRate)
     const deg = Math.PI / 180;
     for(var i=0,l=c.length;i<l;i++) {
       const x = i * 2 / l - 1;
@@ -614,6 +614,7 @@
       this.AcidSynth =  new AcidSynth(this.context)
       this.SpreadSynth =  new SpreadSynth(this.context)
       this.SL = new window.SampleLoader(this.context)
+      this.LATENCY_COMPENSATION = 0.032
       if (this.constructorCallback) {
         this.constructorCallback(this)
       }
@@ -622,7 +623,6 @@
         this[g] = this[g].bind(this)
       })
     }
-
     hello(dis) {
     }
 
@@ -732,8 +732,8 @@
       this.midiOutput(outputName).send(message, midiTime + this.MIDI_DELAY_COMPENSATION);
     }
     note(outputName, channel, note, velocity, time, length) {
-      this.send(outputName, [0x90 + channel, note2note(note), velocity], time)
-      this.send(outputName, [0x80 + channel, note2note(note), velocity], time + length)
+      this.send(outputName, [0x90 + channel - 1, note2note(note), velocity], time)
+      this.send(outputName, [0x80 + channel - 1, note2note(note), velocity], time + length)
     }
 
   }
@@ -750,7 +750,27 @@
         this.callPattern();
         this.updateLaunchpad()
         window.__engine = this;
+        const { ipcRenderer } = require('electron')
+        ipcRenderer.on('link-update', this.linkSync.bind(this))
       });
+    }
+    linkSync(event, arg) {
+
+      var timePerStep = 60 / (4 * this.soundEngine.tempo);
+      const patternLength = this.soundEngine.steps * timePerStep
+      let desiredPhase = ((this.soundEngine.context.currentTime - this.soundEngine.LATENCY_COMPENSATION) - (this.nextPatternTime - patternLength)) / patternLength
+      if (desiredPhase < 0) { desiredPhase = 1 + desiredPhase }
+      desiredPhase *= 4
+      let diff = arg.phase - desiredPhase
+      if (Math.abs(diff) > 2) { // wrap case
+        if (arg.phase < 2) {
+          diff = (arg.phase + 4.0) - desiredPhase
+        } else {
+          diff = arg.phase - (desiredPhase + 4.0)
+        }
+
+      }
+      this.soundEngine.tempo = arg.bpm + (diff * 20)
     }
 
     updateLaunchpad() {

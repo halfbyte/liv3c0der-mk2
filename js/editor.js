@@ -5,8 +5,6 @@
   var db = new PouchDB('liv3c0der');
   var currentDoc = null;
 
-
-
   document.addEventListener('DOMContentLoaded', startEditor);
 
   const engine = new Engine();
@@ -17,6 +15,10 @@
     window.__editor = editor
     editor.setTheme("ace/theme/monokai");
     editor.session.setMode("ace/mode/javascript");
+    editor.session.setOptions({
+      tabSize: 2,
+      useSoftTabs: true
+    });
     editor.commands.addCommand({
         name: "execute",
         bindKey: { win: "Ctrl-Enter", mac: "Command-Enter" },

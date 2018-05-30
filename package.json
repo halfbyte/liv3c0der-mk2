@@ -1,0 +1,27 @@
+{
+  "name": "liv3c0der-mk2",
+  "version": "1.0.0",
+  "description": "This is a work in progress. To see what's going on and what's already working, please see [the docs](docs/index.md) for more info.",
+  "main": "src/main.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "electron ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/halfbyte/liv3c0der-mk2.git"
+  },
+  "author": "Jan Krutisch <jan@krutisch.de> (https://jan.krutisch.de/)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/halfbyte/liv3c0der-mk2/issues"
+  },
+  "homepage": "https://github.com/halfbyte/liv3c0der-mk2#readme",
+  "dependencies": {
+    "abletonlink": "0.0.7",
+    "electron": "^2.0.2"
+  }
+}
