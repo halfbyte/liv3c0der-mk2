@@ -1,23 +1,14 @@
-var methodDefinitions = null;
-
-function patternContext(code, SE, ME) {
-  // actual evaluation
-  // const globals = ['n', 'CH', 'LV', 'SEND', 'ch', 'dp', 'mb']
-
-  var n = SE.n
-  var CH = SE.CH
-  var LV = SE.LV
-  var SEND = SE.SEND
-  var ch = SE.ch
-  var dp = SE.dp
-  var mb = SE.mb
-  var SL = SE.SL
+function patternContext(code, ME) {
+  var ch = this.ch.bind(this)
+  var dp = this.dp.bind(this)
+  var mb = this.mb.bind(this)
+  var n = ME.note.bind(ME)
 
   try {
     eval(code);
 
     if (typeof once === 'function') {
-      once.call(SE);
+      once.call();
     }
     if (typeof pattern !== 'undefined') {
       return pattern;

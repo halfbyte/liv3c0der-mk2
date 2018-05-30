@@ -2,12 +2,20 @@
   'use strict';
 
   var defaultProgram = "//name:default\nfunction pattern(t) {\nhello(t);\n}\n";
-  var db = new PouchDB('liv3c0der');
   var currentDoc = null;
+
+  const { app } = require('electron').remote
+  const fs = require('fs')
+  const path = require('path')
+  const sanitize = require('sanitize-filename')
+  var skipReload = false
+
+  const docDir = path.join(app.getPath('documents'), 'MidiCoder')
 
   document.addEventListener('DOMContentLoaded', startEditor);
 
   const engine = new Engine();
+  engine.onerror = showError
   var editor;
 
   function startEditor() {
@@ -61,38 +69,38 @@
 
   function deleteSong() {
     let name = decodeURIComponent(window.location.hash.slice(1))
-    if (name !== '' && confirm("Really want to delete the current document?")) {
-      db.get(name, (err, doc) => {
-        if (!err) {
-          db.remove(doc)
-          window.location.hash = "default"
+    if (name !== '' && name !== 'default' && confirm("Really want to delete the current document?")) {
+      const fullPath = path.join(docDir, `${name}.js`)
+      fs.unlink(fullPath, (err) => {
+        if (err) {
+          showError("ERROR deleting file " + err.message)
+          console.log("ERROR deleting file", err)
+        } else {
+          refeshDocList()
         }
       })
+      window.location.hash = "default"
     }
   }
 
   function loadFromHash() {
+    if (skipReload) { // do not reload freshly saved things
+      skipReload = false
+      return;
+    }
     let name = decodeURIComponent(window.location.hash.slice(1))
     if (name === '') {
       name = 'default'
     }
-    console.log("Loading")
-    db.get(name, (err, doc) => {
+    console.log("Loading", name)
+    const fileName = `${name}.js`
+    const fullPath = path.join(docDir, fileName)
+    fs.readFile(fullPath, 'utf8', (err, data) => {
       if (err) {
-        console.log(err)
-        // bootstrap
-        if (name === 'default') {
-          db.put({"_id": "default", "code": defaultProgram}, function(err, result) {
-            if (err) {
-              console.log("ERR", err)
-            } else {
-              console.log(result)
-            }
-          })
-        }
+        showError("Could not read file " + err.message)
+        console.log("ERROR reading file", err)
       } else {
-        currentDoc = doc
-        editor.setValue(doc.code);
+        editor.setValue(data);
         editor.focus()
       }
     })
@@ -116,66 +124,85 @@
       })
     })
     refeshDocList()
-    db.changes({
-      since: 'now',
-      live: true
-    }).on('change', refeshDocList);
   }
 
   function refeshDocList() {
-    db.allDocs({include_docs: false}, function(err, doc) {
-    if (err) {
-      console.log("No Docs", err)
-    }
-    const el = document.getElementById('songs')
-    el.innerHTML = ""
-
-    doc.rows.forEach((row) => {
-      const li = document.createElement('li')
-      const a = document.createElement('a')
-      const t = document.createTextNode(row.id)
-      a.href = `#${encodeURI(row.id)}`
-      a.appendChild(t)
-      li.appendChild(a)
-      el.append(li)
+    fs.readdir(docDir, (err, files) => {
+      if (err) {
+        console.log("Error reading doc dir")
+      } else {
+        const el = document.getElementById('songs')
+        el.innerHTML = ""
+        files.forEach((filename) => {
+          const displayName = path.basename(filename, '.js')
+          const li = document.createElement('li')
+          const a = document.createElement('a')
+          const t = document.createTextNode(displayName)
+          a.href = `#${encodeURI(displayName)}`
+          a.appendChild(t)
+          li.appendChild(a)
+          el.append(li)
+        })
+      }
     })
-
-
-  });
   }
+
+  function showError(error) {
+    const errorList = document.getElementById('errors')
+    window.__lastError = error
+    const li = document.createElement('li')
+    li.setAttribute('data-remove', (new Date().getTime() + 5000))
+    const text = document.createTextNode(error.stack)
+    li.appendChild(text)
+    errorList.appendChild(li)
+  }
+
+  function clearError() {
+    const errorList = document.getElementById('errors')
+    if (errorList.firstChild) {
+      const removalTime = parseInt(errorList.firstChild.getAttribute('data-remove'), 10)
+      if (new Date().getTime() > removalTime) {
+        errorList.firstChild.remove()
+      }
+    }
+    setTimeout(clearError, 1000)
+  }
+  clearError()
 
   function evaluate() {
     engine.evaluate(editor.getValue());
   }
 
   function save() {
+    console.log("START SAVING")
     const code = editor.getValue();
     var name = new Date().toISOString()
-    window.__code = code
     const nameMatch = code.match(/name\:(.*)$/im)
-    console.log(nameMatch)
     if (nameMatch) {
       name = nameMatch[1].trim()
     }
-    var doc = {
-      _id: name,
-      code: code
-    }
-    if (currentDoc != null) {
-      console.log(currentDoc)
-      doc = currentDoc
-      doc.code = code
-    }
-    db.put(doc, (err, res) => {
-      if (err) {
-        console.log("Error", err)
+    name = sanitize(name)
+    const fullPath = path.join(docDir, name + ".js")
+    fs.mkdir(docDir, (err) => {
+
+      if (!err || err.message.match(/EEXIST/)) {
+        fs.writeFile(fullPath, code, (err) => {
+          if (err) {
+            showError("Could not write to file " + err.message)
+            console.log("Could not write file.", fullPath, err)
+          } else {
+            refeshDocList()
+            skipReload = true
+            location.hash = name
+          }
+        })
       } else {
-        window.location.hash = name
-        console.log("saved", res)
-        currentDoc = doc
-        doc._rev = res.rev
+        console.log("Could not create dir.", docDir, err)
+        showError("Could not create dir." + err.message)
       }
     })
+
+
   }
 
 })(window);
