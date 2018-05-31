@@ -59,8 +59,8 @@ class LaunchpadEditor {
     if(!this.enabled) { return }
     this.output.send([0xb0, 0, 0])
   }
-  refreshPattern() {
-    setTimeout(() => this.refreshPattern(), 60, this)
+  refresh() {
+    // setTimeout(() => this.refreshPattern(), 60, this)
     if (!this.enabled) { return }
     var i,j
     var l = 16
@@ -92,6 +92,18 @@ class LaunchpadEditor {
     for(var i=0,l=16;i<l;i++) {
       const step = i % pattern.length;
       if (pattern[step]) { callback(i); }
+    }
+  }
+  checkPatterns(patterns) {
+    if (patterns.length !== 4) {return false};
+    for(var i=0,l=patterns.length;i<l;i++) {
+      if (patterns[i].length !== 16) {return false};
+    }
+    return true
+  }
+  setPatterns(patterns) {
+    if (this.checkPatterns(patterns)) {
+      this.patterns = patterns
     }
   }
 

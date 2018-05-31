@@ -7,11 +7,23 @@
     'maj-6': [0,4,7,9],
     'min-6': [0,3,7,9],
     'maj-7': [0,4,7,11],
-    'min-7': [0,4,7,10],
+    'min-7': [0,3,7,10],
     'haus': [0,3,7,12],
   }
 
   //////////////////////////////////////////////// Utilities
+
+  class Ring {
+    constructor(...values) {
+      this._values = values;
+      this._index = 0;
+      this.length = this._values.length
+    }
+    next() {
+      return this._values[this._index++ % this.length];
+    }
+  }
+
 
 
   function s2f(note) {
@@ -41,6 +53,8 @@
   }
 
   //////////////////////////////////////////////// Engine
+
+  const CLOCK_BLACKLIST = ["IAC-Treiber Bus 1"]
 
   class MIDIEngine {
     constructor(callback) {
@@ -89,6 +103,20 @@
     note(outputName, channel, note, velocity, time, length = 20) {
       this.send(outputName, [0x90 + channel - 1, note2note(note), velocity], time)
       this.send(outputName, [0x80 + channel - 1, note2note(note), velocity], time + length)
+    }
+    ctrl(outputName, channel, control, value, time) {
+      this.send(outputName, [0xB0 + channel - 1, control, value], time)
+    }
+    sendClock(start, timePerStep, steps) {
+      console.log("Send clk")
+      const timePerSubstep = timePerStep / 6;
+      for(var p=0,l=steps*6;p<l;p++) {
+        Object.keys(this._OUTPUTS).forEach((outputName) => {
+          if (CLOCK_BLACKLIST.indexOf(outputName) === -1) {
+            this._OUTPUTS[outputName].send([0xF8], start + (p * timePerSubstep))
+          }
+        })
+      }
     }
 
   }
@@ -143,7 +171,8 @@
         const timeInPattern = performance.now() - this.currentPatternTime
         var currentStep = Math.floor(timeInPattern / timePerStep)
         if (currentStep < 0) { currentStep = currentStep + 16 }
-        window.Launchpad.currentStep = currentStep
+        Launchpad.currentStep = currentStep
+        Launchpad.refresh()
       }
     }
 
@@ -166,6 +195,7 @@
             groove = this.swing * timePerStep;
           }
           stepTimes.push(this.nextPatternTime + (timePerStep * i + groove));
+
         }
         try {
           this.pattern.call(this, stepTimes, timePerStep);
@@ -181,6 +211,7 @@
         }
 
       }
+      this.midiEngine.sendClock(this.nextPatternTime, timePerStep, this.steps)
       this.currentPatternTime = this.nextPatternTime;
       this.nextPatternTime += this.steps * timePerStep;
       this.lc += 1
@@ -206,6 +237,7 @@
       });
       if (typeof(fun) === 'function') {
         notes.forEach(fun, this);
+        return notes;
       } else {
         return notes;
       }
@@ -227,6 +259,30 @@
         }
       }
     }
+    n2n(n) {
+      return note2note(n)
+    }
+    ptn(array, callback) {
+      for(var i=0,l=array.length;i<l;i++) {
+        callback(array[i][1], array[i][0])
+      }
+    }
+    r(...values) {
+      return new Ring(...values)
+    }
+    a(notes, callback) {
+      notes.forEach(callback)
+    }
+    sample(array) {
+      return array[Math.floor(Math.random() * array.length - 1)]
+    }
+    sin(input, min, max) {
+      return min + (Math.sin(input) + 1) * 0.5 * max
+    }
+    each(loop, inst, callback) {
+      if (this.lc % loop === inst) { callback()}
+    }
+
 
   }
   window.Engine = Engine;

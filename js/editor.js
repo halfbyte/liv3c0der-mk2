@@ -43,6 +43,11 @@
         exec: save
     });
     editor.commands.addCommand({
+        name: "save lp pattern",
+        bindKey: { win: "Ctrl-Shift-S", mac: "Command-Shift-S" },
+        exec: saveLaunchpadPattern
+    });
+    editor.commands.addCommand({
         name: "delete",
         bindKey: { win: "Ctrl-D", mac: "Command-D" },
         exec: deleteSong
@@ -60,6 +65,25 @@
 
     loadFromHash()
     setupLists()
+
+  }
+
+  function saveLaunchpadPattern() {
+    const patternsSerialized = JSON.stringify(Launchpad.patterns)
+    console.log(patternsSerialized)
+    var ed = editor.getValue()
+    ed += `\n// LP: ${patternsSerialized}`
+    editor.setValue(ed);
+  }
+
+  function loadLaunchpadPatterns() {
+    const code = editor.getValue()
+    const pMatch = code.match(/LP\:(.*)$/im)
+    if (pMatch) {
+      const patternString = pMatch[1].trim()
+      const patterns = JSON.parse(patternString)
+      window.Launchpad.setPatterns(patterns)
+    }
 
   }
 
@@ -99,12 +123,15 @@
       if (err) {
         showError("Could not read file " + err.message)
         console.log("ERROR reading file", err)
+        editor.setValue(defaultProgram);
       } else {
         editor.setValue(data);
+        loadLaunchpadPatterns()
         editor.focus()
       }
     })
   }
+
 
   function toggleClass(element, cls) {
     if (element.className.indexOf(cls) !== -1) {
