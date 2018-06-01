@@ -2,8 +2,8 @@ function patternContext(code, ME) {
   var ch = this.ch.bind(this)
   var dp = this.dp.bind(this)
   var mb = this.mb.bind(this)
-  var n = ME.note.bind(ME)
-  var ctrl = ME.ctrl.bind(ME)
+  var n = this.note.bind(this)
+  var ctrl = this.ctrl.bind(this)
   var n2n = this.n2n.bind(this)
   var ptn = this.ptn.bind(this)
   var lp = Launchpad.callPattern.bind(Launchpad)
@@ -12,7 +12,7 @@ function patternContext(code, ME) {
   var sample = this.sample.bind(this)
   var sin = this.sin.bind(this)
   var each  = this.each.bind(this)
-  
+
   const V_KICK = 36
   const V_SNARE = 38
   const V_LOTOM = 43

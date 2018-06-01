@@ -52,7 +52,7 @@ class LaunchpadEditor {
     console.log("LP LATE INIT")
     this.assignPorts(access)
     this.clear()
-    this.refreshPattern()
+    this.refresh()
     console.log("Done")
   }
   clear() {

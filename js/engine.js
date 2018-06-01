@@ -58,6 +58,7 @@
 
   class MIDIEngine {
     constructor(callback) {
+      this.clockSource = "IAC-Treiber Bus 1"
       this._constructorCallback = callback
       if (navigator.requestMIDIAccess == null) { return }
       navigator.requestMIDIAccess().then((access) => {
@@ -74,6 +75,13 @@
       this.midiAccess.inputs.forEach((input) => {
         this._INPUTS[input.name] = input;
         input.onmidimessage = (event) => {
+          if (event.data[0] === 0xF8 && typeof this.onClockTick === 'function' && event.target.name === this.clockSource) {
+            this.onClockTick()
+            this.sendClock(event.target.name)
+          }
+          if (event.data[0] === 0xFA && typeof this.onClockReset === 'function' && this.event.target.name === this.clockSource) {
+              this.onClockReset()
+          }
           this._sendInput(event.data);
         }
       })
@@ -83,6 +91,13 @@
       if (typeof this._constructorCallback === 'function') {
         this._constructorCallback(this)
       }
+    }
+    sendAllNotesOff() {
+      Object.keys(this._OUTPUTS).forEach((out) => {
+        for(var i=0;i<16;i++) {
+          this._OUTPUTS[out].send([0xB0, 123, 0])
+        }
+      })
     }
     midiOutput(name) {
       return this._OUTPUTS[name];
@@ -100,29 +115,20 @@
       this.midiOutput(outputName).send(message, time);
 
     }
-    note(outputName, channel, note, velocity, time, length = 20) {
-      this.send(outputName, [0x90 + channel - 1, note2note(note), velocity], time)
-      this.send(outputName, [0x80 + channel - 1, note2note(note), velocity], time + length)
+    sendClock(source) {
+      Object.keys(this._OUTPUTS).forEach((outputName) => {
+        if (source !== outputName && CLOCK_BLACKLIST.indexOf(outputName) === -1) {
+          this._OUTPUTS[outputName].send([0xF8])
+        }
+      })
     }
-    ctrl(outputName, channel, control, value, time) {
-      this.send(outputName, [0xB0 + channel - 1, control, value], time)
-    }
-    sendClock(start, timePerStep, steps) {
-      console.log("Send clk")
-      const timePerSubstep = timePerStep / 6;
-      for(var p=0,l=steps*6;p<l;p++) {
-        Object.keys(this._OUTPUTS).forEach((outputName) => {
-          if (CLOCK_BLACKLIST.indexOf(outputName) === -1) {
-            this._OUTPUTS[outputName].send([0xF8], start + (p * timePerSubstep))
-          }
-        })
-      }
-    }
-
   }
 
   class Engine {
     constructor() {
+      this.tickCount = 0
+      this.scheduledEvents = []
+      this.ticksPerStep = 6 // 1 step = 16th note, that makes 24 ticks per 1/4 note as per spec
       this.tempo = 120
       this.swing = 0.0
       this.steps = 16;
@@ -141,36 +147,63 @@
         var timingWorker = new Worker('js/timing-worker.js')
         timingWorker.onmessage = (event) => {
           if (event.data === 'tick') {
-            this.callPattern()
+            //this.callPattern()
             this.updateLaunchpad()
           }
         }
+        midiEngine.onClockTick = this.onClockTick.bind(this);
+        midiEngine.onClockReset = this.onClockReset.bind(this);
       });
     }
-    linkSync(event, arg) {
-      var timePerStep = 60000 / (4 * this.tempo);
-      const patternLength = this.steps * timePerStep
-      let desiredPhase = (performance.now() - (this.nextPatternTime - patternLength)) / patternLength
-      if (desiredPhase < 0) { desiredPhase = 1 + desiredPhase }
-      desiredPhase *= 4
-      let diff = arg.phase - desiredPhase
-      if (Math.abs(diff) > 2) { // wrap case
-        if (arg.phase < 2) {
-          diff = (arg.phase + 4.0) - desiredPhase
-        } else {
-          diff = arg.phase - (desiredPhase + 4.0)
-        }
-
+    onClockTick() {
+      if (this.tickCount % (this.steps * this.ticksPerStep) === 0) {
+        this.callPattern()
       }
-      this.tempo = arg.bpm + (diff * 20)
+      this.scheduleEvents(this.tickCount++)
+    }
+    onClockReset() {
+      console.log("CLOCK RESET")
+      this.midiEngine.sendAllNotesOff.call(this.midiEngine)
+      this.scheduledEvents = []
+      this.tickCount = 0
+    }
+    scheduleEvents(tick) {
+      if (this.scheduledEvents[tick]) {
+        this.scheduledEvents[tick].forEach((event) => {
+          var time = null
+          if (this.shuffle > 0 && tick % 12 === 6) {
+            time = this.shuffle + performance.now()
+          }
+          this.midiEngine.send.call(this.midiEngine, event.device, event.data, time)
+        })
+      }
+    }
+    appendEvent(tick, device, message) {
+      this.scheduledEvents[tick] = this.scheduledEvents[tick] || []
+      this.scheduledEvents[tick].push({device: device, data: message})
+    }
+
+    linkSync(event, arg) {
+      // var timePerStep = 60000 / (4 * this.tempo);
+      // const patternLength = this.steps * timePerStep
+      // let desiredPhase = (performance.now() - (this.nextPatternTime - patternLength)) / patternLength
+      // if (desiredPhase < 0) { desiredPhase = 1 + desiredPhase }
+      // desiredPhase *= 4
+      // let diff = arg.phase - desiredPhase
+      // if (Math.abs(diff) > 2) { // wrap case
+      //   if (arg.phase < 2) {
+      //     diff = (arg.phase + 4.0) - desiredPhase
+      //   } else {
+      //     diff = arg.phase - (desiredPhase + 4.0)
+      //   }
+      //
+      // }
+      // this.tempo = arg.bpm + (diff * 20)
     }
 
     updateLaunchpad() {
       if (window.Launchpad && window.Launchpad.enabled) {
-        const timePerStep = 60000 / (4 * this.tempo);
-        const timeInPattern = performance.now() - this.currentPatternTime
-        var currentStep = Math.floor(timeInPattern / timePerStep)
-        if (currentStep < 0) { currentStep = currentStep + 16 }
+        const currentStep = Math.floor(this.tickCount / this.ticksPerStep) % (this.steps)
         Launchpad.currentStep = currentStep
         Launchpad.refresh()
       }
@@ -183,19 +216,12 @@
     }
 
     callPattern() {
-      var timePerStep = 60000 / (4 * this.tempo);
-      if (this.nextPatternTime > 0 && this.nextPatternTime - performance.now() > 400) { return; }
-      if (this.nextPatternTime === 0) { this.nextPatternTime = performance.now() }
+      var timePerStep = this.ticksPerStep
       if (typeof this.pattern === 'function') {
         var stepTimes = [];
         var i;
         for(i=0;i<this.steps;i++) {
-          var groove = 0;
-          if (i % 2 === 1) {
-            groove = this.swing * timePerStep;
-          }
-          stepTimes.push(this.nextPatternTime + (timePerStep * i + groove));
-
+          stepTimes.push(this.tickCount + (timePerStep * i));
         }
         try {
           this.pattern.call(this, stepTimes, timePerStep);
@@ -211,9 +237,7 @@
         }
 
       }
-      this.midiEngine.sendClock(this.nextPatternTime, timePerStep, this.steps)
-      this.currentPatternTime = this.nextPatternTime;
-      this.nextPatternTime += this.steps * timePerStep;
+      // this.midiEngine.sendClock(this.nextPatternTime, timePerStep, this.steps)
       this.lc += 1
     }
     stop() {
@@ -281,6 +305,14 @@
     }
     each(loop, inst, callback) {
       if (this.lc % loop === inst) { callback()}
+    }
+
+    note(outputName, channel, note, velocity, tick, length = 6) {
+      this.appendEvent(tick, outputName, [0x90 + channel - 1, note2note(note), velocity])
+      this.appendEvent(tick + length, outputName, [0x80 + channel - 1, note2note(note), velocity])
+    }
+    ctrl(outputName, channel, control, value, tick) {
+      this.appendEvent(tick, outputName, [0xB0 + channel - 1, control, value])
     }
 
 
