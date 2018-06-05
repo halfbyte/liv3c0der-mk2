@@ -54,8 +54,8 @@
 
   //////////////////////////////////////////////// Engine
 
-  const CLOCK_BLACKLIST = ["IAC-Treiber Bus 1"]
-
+  const CLOCK_BLACKLIST = ["IAC-Treiber Bus 1", "iConnectMIDI iCM DIN 1", ]
+  const CLOCK_WHITELIST = ["Circuit"]
   class MIDIEngine {
     constructor(callback) {
       this.clockSource = "IAC-Treiber Bus 1"
@@ -79,8 +79,12 @@
             this.onClockTick()
             this.sendClock(event.target.name)
           }
-          if (event.data[0] === 0xFA && typeof this.onClockReset === 'function' && this.event.target.name === this.clockSource) {
+          if (event.data[0] === 0xFA && typeof this.onClockReset === 'function' && event.target.name === this.clockSource) {
               this.onClockReset()
+          }
+          if (event.data[0] === 0xFC && typeof this.onClockStop === 'function' && event.target.name === this.clockSource) {
+            console.log("STOPP")
+              this.onClockStop()
           }
           this._sendInput(event.data);
         }
@@ -117,7 +121,7 @@
     }
     sendClock(source) {
       Object.keys(this._OUTPUTS).forEach((outputName) => {
-        if (source !== outputName && CLOCK_BLACKLIST.indexOf(outputName) === -1) {
+        if (source !== outputName && CLOCK_WHITELIST.indexOf(outputName) !== -1) {
           this._OUTPUTS[outputName].send([0xF8])
         }
       })
@@ -153,6 +157,7 @@
         }
         midiEngine.onClockTick = this.onClockTick.bind(this);
         midiEngine.onClockReset = this.onClockReset.bind(this);
+        midiEngine.onClockStop = this.onClockStop.bind(this);
       });
     }
     onClockTick() {
@@ -163,9 +168,19 @@
     }
     onClockReset() {
       console.log("CLOCK RESET")
+
       this.midiEngine.sendAllNotesOff.call(this.midiEngine)
       this.scheduledEvents = []
       this.tickCount = 0
+      this.lc = 0
+    }
+    onClockStop() {
+      console.log("CLOCK STAHP!")
+      this.midiEngine.sendAllNotesOff.call(this.midiEngine)
+      this.scheduledEvents = []
+      this.tickCount = 0
+      this.lc = 0
+      this.stop()      
     }
     scheduleEvents(tick) {
       if (this.scheduledEvents[tick]) {
@@ -273,8 +288,8 @@
         }
       }
     }
-    dp(pattern, callback) {
-      for(var i=0,l=this.steps;i<l;i++) {
+    dp(pattern, callback, steps = this.steps) {
+      for(var i=0,l=steps;i<l;i++) {
         const step = i % pattern.length;
         if (pattern[step] === '*') {
           callback(i, function(a,b) { return a;});
@@ -306,10 +321,19 @@
     each(loop, inst, callback) {
       if (this.lc % loop === inst) { callback()}
     }
+    rejig(substeps, first=0) {
+      const allSteps = this.steps * this.ticksPerStep
+      const perStep = allSteps / substeps
+      const stepNums = []
+      for(var i=0;i<allSteps;i++) {
+        stepNums.push(first + (i * perStep))
+      }
+      return stepNums
+    }
 
-    note(outputName, channel, note, velocity, tick, length = 6) {
+    note(outputName, channel, note, velocity, tick, length) {
       this.appendEvent(tick, outputName, [0x90 + channel - 1, note2note(note), velocity])
-      this.appendEvent(tick + length, outputName, [0x80 + channel - 1, note2note(note), velocity])
+      this.appendEvent(tick + Math.floor(length * this.ticksPerStep), outputName, [0x80 + channel - 1, note2note(note), velocity])
     }
     ctrl(outputName, channel, control, value, tick) {
       this.appendEvent(tick, outputName, [0xB0 + channel - 1, control, value])
