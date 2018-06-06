@@ -80,7 +80,7 @@ function drawFrame(frameNum) {
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   ctx.strokeStyle = "#ff0"
   // ctx.fillRect(0, 0, canvas.width, canvas.height)
-  ctx.fillStyle = "rgba(255,255,255, 0.5)"
+  ctx.fillStyle = "hsl(" + frameNum % 360 +",100%,50%)"
   ctx.lineWidth = 4
   ctx.fillRect((frameNum * 2) % 960, (frameNum * 2) % 160, 20, 20)
   ctx.beginPath()
